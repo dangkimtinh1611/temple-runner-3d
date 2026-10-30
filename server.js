@@ -88,6 +88,16 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ----- Voice chat: relay tín hiệu WebRTC trong cùng phòng -----
+  socket.on('voice-ready', () => {
+    // Báo cho những người khác trong phòng biết mình sẵn sàng voice -> họ sẽ gọi tới
+    if(room) socket.to(room).emit('voice-peer', { id: socket.id });
+  });
+  socket.on('voice-signal', ({ to, data }) => {
+    // Chuyển tiếp offer/answer/ICE tới đúng người nhận
+    if(to) io.to(to).emit('voice-signal', { from: socket.id, data });
+  });
+
   // Cập nhật vị trí/điểm -> chỉ gửi trong cùng phòng
   socket.on('state', (s) => {
     if(!room || !rooms[room] || !rooms[room][socket.id]) return;

@@ -82,6 +82,16 @@
             background:rgba(124,255,0,.28);border-color:rgba(124,255,0,.7);}
   #btnSlide{right:112px;bottom:70px;background:rgba(255,45,120,.28);border-color:rgba(255,45,120,.7);}
 
+  /* Nút voice (mic/loa) — hiện khi đang chơi */
+  .voiceBar{position:fixed;top:48px;left:50%;transform:translateX(-50%);z-index:9;display:none;gap:8px;}
+  .voiceBar.on{display:flex;}
+  .vbtn{width:44px;height:44px;border-radius:50%;border:2px solid #475569;background:rgba(30,41,59,.8);
+        color:#e2e8f0;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+        pointer-events:auto;transition:transform .1s;}
+  .vbtn:active{transform:scale(.9);}
+  .vbtn.off{background:rgba(248,113,113,.3);border-color:#f87171;}       /* đang tắt */
+  .vbtn.active{background:rgba(124,255,0,.22);border-color:#7cff00;}     /* đang bật/đang nói */
+
   /* Danh sách người chơi online */
   .online{position:fixed;top:48px;left:12px;z-index:6;background:rgba(15,23,42,.6);
           border:1px solid #334155;border-radius:10px;padding:8px 12px;font-size:13px;max-width:200px;}
@@ -141,6 +151,13 @@
     <div class="tbtn" id="btnJump">▲</div>
     <div class="tbtn" id="btnSlide">▼</div>
   </div>
+
+  <!-- Nút đàm thoại bằng giọng nói -->
+  <div class="voiceBar" id="voiceBar">
+    <button class="vbtn off" id="micBtn" title="Bật/tắt mic">🎙️</button>
+    <button class="vbtn active" id="spkBtn" title="Bật/tắt loa">🔊</button>
+  </div>
+  <div id="audioZone" style="display:none"></div>
 
   <!-- Start -->
   <div class="screen" id="startScreen">
@@ -368,7 +385,7 @@ function showLobby(code, players){
   startScr.classList.add('hidden'); overScr.classList.add('hidden');
   lobbyScr.classList.remove('hidden');
   onlineBox.style.display='none'; chatbox.style.display='block'; // chat được ngay trong lobby
-  renderLobby();
+  renderLobby(); updateVoiceBar();
 }
 function renderLobby(){
   const names=['🟦 '+playerName+' (bạn)'];
@@ -383,8 +400,10 @@ function beginRun(){
   reset(); state='play';
   lobbyScr.classList.add('hidden'); startScr.classList.add('hidden'); overScr.classList.add('hidden');
   onlineBox.style.display='block'; chatbox.style.display='block';
-  updateTouchCtrl();
+  updateTouchCtrl(); updateVoiceBar();
 }
+// Chơi lại trong cùng phòng (giữ lại kết nối + nút cảm ứng)
+function restartRun(){ reset(); state='play'; overScr.classList.add('hidden'); updateTouchCtrl(); updateVoiceBar(); }
 function gameOver(){
   state='over';const m=Math.floor(score);finalEl.textContent=m+' m';
   if(m>hiScore){hiScore=m;localStorage.setItem('run3dmp_hi',hiScore);hiEl.textContent=hiScore;overMsg.textContent='🎉 Kỷ lục mới! 🏆 '+trophies+' cúp · 🪙 '+coinCount;}
@@ -443,8 +462,22 @@ function connect(){
 
   socket.on('playerJoined',(p)=>{if(p.id!==socket.id)addOther(p); if(state==='lobby')renderLobby(); updateOnline();});
   socket.on('playerState',(s)=>{const o=others[s.id];if(o){o.tx=LANES[s.lane]??s.x;o.ty=s.y;o.score=s.score;}updateOnline();});
-  socket.on('playerLeft',(id)=>{removeOther(id); if(state==='lobby')renderLobby(); updateOnline();});
+  socket.on('playerLeft',(id)=>{removeOther(id); closePeer(id); if(state==='lobby')renderLobby(); updateOnline();});
   socket.on('chat',(m)=>addChat(m));
+
+  // ----- Voice chat signaling -----
+  socket.on('voice-peer',({id})=>{ if(micOn) callPeer(id,true); });      // có người mới sẵn sàng -> mình gọi tới
+  socket.on('voice-signal',async ({from,data})=>{
+    let pc=peers[from];
+    if(data.sdp){
+      if(!pc) pc=callPeer(from,false);
+      await pc.setRemoteDescription(data.sdp);
+      if(data.sdp.type==='offer'){
+        const ans=await pc.createAnswer(); await pc.setLocalDescription(ans);
+        socket.emit('voice-signal',{to:from,data:{sdp:pc.localDescription}});
+      }
+    } else if(data.ice){ try{ await pc.addIceCandidate(data.ice); }catch(e){} }
+  });
 }
 function doCreate(){ socket.emit('createRoom',{name:playerName,color:shirtColor,pant:pantColor}); }
 function doJoin(code){ socket.emit('joinRoom',{code,name:playerName,color:shirtColor,pant:pantColor}); }
@@ -482,6 +515,61 @@ function sendChat(){const t=chatInput.value.trim();if(!t||!socket)return;socket.
 $('chatSend').addEventListener('click',sendChat);
 chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendChat();}e.stopPropagation();});
 
+// ---------- Voice chat (WebRTC) ----------
+const peers={};            // peers[socketId] = RTCPeerConnection
+let localStream=null, micOn=false, spkOn=true;
+const audioZone=$('audioZone'), voiceBar=$('voiceBar'), micBtn=$('micBtn'), spkBtn=$('spkBtn');
+const RTC_CFG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+
+function callPeer(id,initiator){
+  if(peers[id]) return peers[id];
+  const pc=new RTCPeerConnection(RTC_CFG);
+  peers[id]=pc;
+  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  pc.onicecandidate=e=>{ if(e.candidate) socket.emit('voice-signal',{to:id,data:{ice:e.candidate}}); };
+  pc.ontrack=e=>{
+    let a=document.getElementById('aud-'+id);
+    if(!a){ a=document.createElement('audio'); a.id='aud-'+id; a.autoplay=true; audioZone.appendChild(a); }
+    a.srcObject=e.streams[0]; a.muted=!spkOn;
+  };
+  if(initiator){
+    pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>{
+      socket.emit('voice-signal',{to:id,data:{sdp:pc.localDescription}});
+    });
+  }
+  return pc;
+}
+function closePeer(id){ if(peers[id]){ peers[id].close(); delete peers[id]; }
+  const a=document.getElementById('aud-'+id); if(a) a.remove(); }
+
+async function toggleMic(){
+  if(!micOn){
+    try{
+      if(!localStream) localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    }catch(e){ showToast('⚠️ Không truy cập được micro'); return; }
+    micOn=true; micBtn.classList.remove('off'); micBtn.classList.add('active'); micBtn.textContent='🎙️';
+    // gắn track vào các peer hiện có + báo mọi người để tạo kết nối
+    localStream.getTracks().forEach(t=>{ for(const id in peers){ if(!peers[id].getSenders().some(s=>s.track===t)) peers[id].addTrack(t,localStream); } });
+    socket.emit('voice-ready');
+    for(const id in others) callPeer(id,true);
+  } else {
+    micOn=false; micBtn.classList.add('off'); micBtn.classList.remove('active'); micBtn.textContent='🔇';
+    if(localStream) localStream.getAudioTracks().forEach(t=>t.enabled=false);
+  }
+  if(micOn && localStream) localStream.getAudioTracks().forEach(t=>t.enabled=true);
+}
+function toggleSpk(){
+  spkOn=!spkOn;
+  spkBtn.textContent=spkOn?'🔊':'🔈';
+  spkBtn.classList.toggle('active',spkOn); spkBtn.classList.toggle('off',!spkOn);
+  audioZone.querySelectorAll('audio').forEach(a=>a.muted=!spkOn);
+}
+micBtn.addEventListener('click',toggleMic);
+spkBtn.addEventListener('click',toggleSpk);
+
+// Hiện/ẩn thanh voice theo trạng thái chơi (lobby + play đều cho nói)
+function updateVoiceBar(){ voiceBar.classList.toggle('on', state==='lobby'||state==='play'||state==='over'); }
+
 // ---------- Controls ----------
 $('createBtn').addEventListener('click',createRoom);
 $('joinBtn').addEventListener('click',joinRoom);
@@ -489,6 +577,10 @@ codeInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
 // Lobby
 $('beginBtn').addEventListener('click',()=>{ if(socket) socket.emit('startGame'); });
 $('leaveBtn').addEventListener('click',()=>{
+  for(const id in peers) closePeer(id);
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  micOn=false; micBtn.classList.add('off'); micBtn.classList.remove('active'); micBtn.textContent='🎙️';
+  voiceBar.classList.remove('on'); $('touchCtrl').classList.remove('on');
   if(socket) socket.disconnect(); socket=null; myRoom=null; clearOthers();
   roomTag.style.display='none'; lobbyScr.classList.add('hidden'); chatbox.style.display='none';
   chatlog.innerHTML=''; state='start'; startScr.classList.remove('hidden'); statusEl.textContent='⚪ Chưa kết nối';
@@ -496,14 +588,14 @@ $('leaveBtn').addEventListener('click',()=>{
 $('copyCodeBtn').addEventListener('click',()=>{
   navigator.clipboard?.writeText(myRoom||'').then(()=>{ $('copyCodeBtn').textContent='✅ Đã chép!'; setTimeout(()=>$('copyCodeBtn').textContent='📋 Sao chép mã',1500); });
 });
-$('retryBtn').addEventListener('click',()=>{reset();state='play';overScr.classList.add('hidden');});
+$('retryBtn').addEventListener('click',restartRun);
 addEventListener('keydown',e=>{
   if(document.activeElement===chatInput||document.activeElement===codeInput||document.activeElement===$('nameInput'))return;
   if(e.code==='ArrowLeft')moveLane(-1);
   if(e.code==='ArrowRight')moveLane(1);
   if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();
     if(state==='play')jump();
-    else if(state==='over'){reset();state='play';overScr.classList.add('hidden');}}
+    else if(state==='over'){restartRun();}}
   if(e.code==='ArrowDown')slide();
   if(e.code==='Enter'&&state==='play'){chatInput.focus();}
 });
