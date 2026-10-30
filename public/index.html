@@ -40,6 +40,33 @@
   .keys{font-size:12.5px;color:#64748b;line-height:1.7;}
   kbd{background:#334155;border:1px solid #475569;border-radius:6px;padding:2px 8px;font-size:12px;color:#e2e8f0;}
 
+  /* Khối phòng chơi */
+  .roombox{display:flex;flex-direction:column;gap:10px;align-items:center;width:min(320px,86vw);
+           background:rgba(30,41,59,.5);border:1px solid #334155;border-radius:14px;padding:16px;}
+  .roombox .or{font-size:12px;color:#64748b;}
+  .joinRow{display:flex;gap:8px;width:100%;}
+  .joinRow input{flex:1;padding:11px 12px;border-radius:10px;border:1px solid #475569;background:#0f172a;
+       color:#f8fafc;font-size:17px;text-align:center;letter-spacing:3px;text-transform:uppercase;font-weight:800;}
+  .btn.sm{padding:11px 18px;font-size:15px;}
+  .btn.ghost{background:#334155;color:#e2e8f0;box-shadow:none;}
+  .roomcode{background:rgba(56,189,248,.14);border:1px dashed #38bdf8;border-radius:12px;padding:10px 16px;}
+  .roomcode .lbl{font-size:12px;color:#94a3b8;}
+  .roomcode .code{font-size:clamp(26px,7vw,40px);font-weight:900;letter-spacing:6px;color:#38bdf8;}
+  .roomcode button{margin-top:4px;background:#0ea5e9;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:13px;}
+  .roomTag{position:fixed;top:48px;right:12px;z-index:6;background:rgba(56,189,248,.16);border:1px solid #38bdf8;
+           border-radius:10px;padding:6px 12px;font-size:14px;font-weight:800;color:#38bdf8;display:none;}
+  .err{color:#f87171;font-size:13px;min-height:16px;}
+
+  /* Phòng chờ (lobby) */
+  .lobbyCode{background:rgba(56,189,248,.14);border:2px dashed #38bdf8;border-radius:16px;padding:14px 26px;text-align:center;}
+  .lobbyCode .lbl{font-size:13px;color:#94a3b8;}
+  .lobbyCode .code{font-size:clamp(34px,9vw,54px);font-weight:900;letter-spacing:8px;color:#38bdf8;line-height:1.1;}
+  .lobbyCode .copy{margin-top:6px;background:#0ea5e9;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-weight:700;cursor:pointer;font-size:13px;}
+  .lobbyList{background:rgba(30,41,59,.6);border:1px solid #334155;border-radius:12px;padding:12px 16px;min-width:240px;max-width:340px;}
+  .lobbyList h4{font-size:13px;color:#94a3b8;margin-bottom:6px;}
+  .lobbyList .pl{font-size:15px;color:#e2e8f0;padding:3px 0;}
+  .lobbyWait{font-size:13px;color:#64748b;font-style:italic;}
+
   /* Danh sách người chơi online */
   .online{position:fixed;top:48px;left:12px;z-index:6;background:rgba(15,23,42,.6);
           border:1px solid #334155;border-radius:10px;padding:8px 12px;font-size:13px;max-width:200px;}
@@ -70,6 +97,7 @@
   <div id="app"></div>
 
   <div class="status" id="status">⚪ Chưa kết nối</div>
+  <div class="roomTag" id="roomTag">Phòng: —</div>
   <div class="hud">
     <div id="score">0 m</div>
     <div class="coins">🪙 <span id="coins">0</span></div>
@@ -94,17 +122,43 @@
   <!-- Start -->
   <div class="screen" id="startScreen">
     <h1>🏃 <span>Temple Runner 3D</span></h1>
-    <p>Chạy cùng bạn bè trong cùng phòng, thấy nhân vật của nhau và trò chuyện. Mỗi 1000m nhận 1 cúp 🏆!</p>
     <input class="nameInput" id="nameInput" placeholder="Tên của bạn" maxlength="16">
     <div class="picker">
       <div class="row"><b>Áo</b><div class="swatches" id="shirtSw"></div></div>
       <div class="row"><b>Quần</b><div class="swatches" id="pantSw"></div></div>
     </div>
-    <button class="btn" id="startBtn">▶ Vào phòng & chạy</button>
+
+    <div class="roombox">
+      <button class="btn sm" id="createBtn">➕ Tạo phòng mới</button>
+      <div class="or">— hoặc nhập mã phòng của bạn bè —</div>
+      <div class="joinRow">
+        <input id="codeInput" placeholder="MÃ PHÒNG" maxlength="6">
+        <button class="btn sm ghost" id="joinBtn">Vào</button>
+      </div>
+      <div class="err" id="roomErr"></div>
+    </div>
+
     <div class="keys">
       💻 <kbd>←</kbd> <kbd>→</kbd> làn · <kbd>Space</kbd>/<kbd>↑</kbd> nhảy · <kbd>↓</kbd> trượt · <kbd>Enter</kbd> chat<br>
       📱 vuốt <b>trái / phải / lên / xuống</b>
     </div>
+  </div>
+
+  <!-- Lobby (phòng chờ) -->
+  <div class="screen hidden" id="lobbyScreen">
+    <h2>🏠 Phòng chờ</h2>
+    <div class="lobbyCode">
+      <div class="lbl">Mã phòng — gửi cho bạn bè</div>
+      <div class="code" id="lobbyCode">------</div>
+      <button class="copy" id="copyCodeBtn">📋 Sao chép mã</button>
+    </div>
+    <div class="lobbyList">
+      <h4>👥 Người trong phòng</h4>
+      <div id="lobbyList"></div>
+    </div>
+    <div class="lobbyWait" id="lobbyWait">Chờ bạn bè nhập mã để vào…</div>
+    <button class="btn" id="beginBtn">🏁 Bắt đầu chạy</button>
+    <button class="btn ghost sm" id="leaveBtn">← Rời phòng</button>
   </div>
 
   <!-- Game over -->
@@ -131,7 +185,10 @@ const $ = id => document.getElementById(id);
 const statusEl=$('status'), scoreEl=$('score'), coinsEl=$('coins'), trophyEl=$('trophies'),
       hiEl=$('hiscore'), toastEl=$('toast'), startScr=$('startScreen'), overScr=$('overScreen'),
       finalEl=$('finalScore'), overMsg=$('overMsg'), onlineBox=$('onlineBox'), onlineList=$('onlineList'),
-      chatbox=$('chatbox'), chatlog=$('chatlog'), chatInput=$('chatInput');
+      chatbox=$('chatbox'), chatlog=$('chatlog'), chatInput=$('chatInput'),
+      roomTag=$('roomTag'), roomErr=$('roomErr'), codeInput=$('codeInput'),
+      lobbyScr=$('lobbyScreen'), lobbyCodeEl=$('lobbyCode'), lobbyListEl=$('lobbyList'), lobbyWaitEl=$('lobbyWait');
+let myRoom=null, roomPlayers={};
 
 // ---------- Màu & lưu trữ ----------
 const SHIRT_COLORS=[0x00e5ff,0xff2d78,0x7cff00,0xffd500,0xa855ff,0xff7a1a,0xffffff,0xff4d6d];
@@ -275,11 +332,34 @@ function hit(o){const dx=Math.abs(px-o.position.x),dz=Math.abs(0-o.position.z);
 
 function showToast(m){toastEl.textContent=m;toastEl.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>toastEl.classList.remove('show'),1700);}
 
-function startGame(){
-  playerName=($('nameInput').value||'Người chơi').trim().slice(0,16);
-  savePrefs(); connect();
-  reset();state='play';startScr.classList.add('hidden');overScr.classList.add('hidden');
-  onlineBox.style.display='block';chatbox.style.display='block';
+function clearOthers(){for(const id in others){scene.remove(others[id].avatar);delete others[id];}}
+
+// Vào PHÒNG CHỜ (lobby) sau khi tạo/vào phòng thành công
+function showLobby(code, players){
+  myRoom=code; state='lobby';
+  roomTag.textContent='Phòng: '+code; roomTag.style.display='block';
+  lobbyCodeEl.textContent=code;
+  roomPlayers = players || {};
+  clearOthers();
+  for(const id in roomPlayers){ if(id!==socket.id) addOther(roomPlayers[id]); }
+  startScr.classList.add('hidden'); overScr.classList.add('hidden');
+  lobbyScr.classList.remove('hidden');
+  onlineBox.style.display='none'; chatbox.style.display='block'; // chat được ngay trong lobby
+  renderLobby();
+}
+function renderLobby(){
+  const names=['🟦 '+playerName+' (bạn)'];
+  for(const id in others) names.push('🟩 '+(others[id].name||'?'));
+  lobbyListEl.innerHTML=names.map(n=>'<div class="pl">'+n+'</div>').join('');
+  const n=1+Object.keys(others).length;
+  lobbyWaitEl.textContent = n>1 ? ('Có '+n+' người. Bấm Bắt đầu khi sẵn sàng!') : 'Chờ bạn bè nhập mã để vào… (chơi một mình cũng được)';
+}
+
+// Thực sự BẮT ĐẦU CHẠY (khi ai đó bấm Bắt đầu -> cả phòng nhận gameStart)
+function beginRun(){
+  reset(); state='play';
+  lobbyScr.classList.add('hidden'); startScr.classList.add('hidden'); overScr.classList.add('hidden');
+  onlineBox.style.display='block'; chatbox.style.display='block';
 }
 function gameOver(){
   state='over';const m=Math.floor(score);finalEl.textContent=m+' m';
@@ -323,20 +403,35 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
 }
 
 // ---------- Socket.IO Multiplayer ----------
-let socket=null;
+let socket=null, pendingAction=null;
 function connect(){
-  if(socket) return;
+  if(socket){ if(pendingAction) pendingAction(); return; }
   socket=io();
-  socket.on('connect',()=>{statusEl.textContent='🟢 Đã kết nối';
-    socket.emit('join',{name:playerName,color:shirtColor,pant:pantColor});});
+  socket.on('connect',()=>{statusEl.textContent='🟢 Đã kết nối'; if(pendingAction){pendingAction(); pendingAction=null;}});
   socket.on('disconnect',()=>{statusEl.textContent='🔴 Mất kết nối';});
 
-  // danh sách người đã ở trong phòng
-  socket.on('players',(list)=>{for(const id in list){if(id!==socket.id)addOther(list[id]);}updateOnline();});
-  socket.on('playerJoined',(p)=>{if(p.id!==socket.id)addOther(p);updateOnline();});
+  // Vào/tạo phòng thành công -> vào PHÒNG CHỜ
+  socket.on('joined',({code,players})=>{ showLobby(code, players); });
+  socket.on('joinError',(msg)=>{ roomErr.textContent='⚠️ '+msg; });
+  // Cả phòng cùng bắt đầu
+  socket.on('gameStart',()=>{ beginRun(); });
+
+  socket.on('playerJoined',(p)=>{if(p.id!==socket.id)addOther(p); if(state==='lobby')renderLobby(); updateOnline();});
   socket.on('playerState',(s)=>{const o=others[s.id];if(o){o.tx=LANES[s.lane]??s.x;o.ty=s.y;o.score=s.score;}updateOnline();});
-  socket.on('playerLeft',(id)=>{removeOther(id);updateOnline();});
+  socket.on('playerLeft',(id)=>{removeOther(id); if(state==='lobby')renderLobby(); updateOnline();});
   socket.on('chat',(m)=>addChat(m));
+}
+function doCreate(){ socket.emit('createRoom',{name:playerName,color:shirtColor,pant:pantColor}); }
+function doJoin(code){ socket.emit('joinRoom',{code,name:playerName,color:shirtColor,pant:pantColor}); }
+function createRoom(){
+  playerName=($('nameInput').value||'Người chơi').trim().slice(0,16); savePrefs(); roomErr.textContent='';
+  pendingAction=doCreate; connect();
+}
+function joinRoom(){
+  const code=(codeInput.value||'').trim().toUpperCase();
+  if(code.length<4){ roomErr.textContent='⚠️ Nhập mã phòng (6 ký tự).'; return; }
+  playerName=($('nameInput').value||'Người chơi').trim().slice(0,16); savePrefs(); roomErr.textContent='';
+  pendingAction=()=>doJoin(code); connect();
 }
 function addOther(p){
   if(others[p.id])return;
@@ -363,15 +458,29 @@ $('chatSend').addEventListener('click',sendChat);
 chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendChat();}e.stopPropagation();});
 
 // ---------- Controls ----------
-$('startBtn').addEventListener('click',startGame);
+$('createBtn').addEventListener('click',createRoom);
+$('joinBtn').addEventListener('click',joinRoom);
+codeInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinRoom();}e.stopPropagation();});
+// Lobby
+$('beginBtn').addEventListener('click',()=>{ if(socket) socket.emit('startGame'); });
+$('leaveBtn').addEventListener('click',()=>{
+  if(socket) socket.disconnect(); socket=null; myRoom=null; clearOthers();
+  roomTag.style.display='none'; lobbyScr.classList.add('hidden'); chatbox.style.display='none';
+  chatlog.innerHTML=''; state='start'; startScr.classList.remove('hidden'); statusEl.textContent='⚪ Chưa kết nối';
+});
+$('copyCodeBtn').addEventListener('click',()=>{
+  navigator.clipboard?.writeText(myRoom||'').then(()=>{ $('copyCodeBtn').textContent='✅ Đã chép!'; setTimeout(()=>$('copyCodeBtn').textContent='📋 Sao chép mã',1500); });
+});
 $('retryBtn').addEventListener('click',()=>{reset();state='play';overScr.classList.add('hidden');});
 addEventListener('keydown',e=>{
-  if(document.activeElement===chatInput)return; // đang gõ chat thì bỏ qua phím game
+  if(document.activeElement===chatInput||document.activeElement===codeInput||document.activeElement===$('nameInput'))return;
   if(e.code==='ArrowLeft')moveLane(-1);
   if(e.code==='ArrowRight')moveLane(1);
-  if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();if(state!=='play'){if(!startScr.classList.contains('hidden'))startGame();else{reset();state='play';overScr.classList.add('hidden');}}else jump();}
+  if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();
+    if(state==='play')jump();
+    else if(state==='over'){reset();state='play';overScr.classList.add('hidden');}}
   if(e.code==='ArrowDown')slide();
-  if(e.code==='Enter'){chatInput.focus();}
+  if(e.code==='Enter'&&state==='play'){chatInput.focus();}
 });
 let sx=0,sy=0;
 addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
@@ -385,8 +494,8 @@ function buildSwatches(el,colors,getA,onPick){el.innerHTML='';colors.forEach(c=>
   d.className='sw'+(c===getA()?' active':'');d.style.background='#'+c.toString(16).padStart(6,'0');
   d.addEventListener('click',()=>onPick(c));el.appendChild(d);});}
 const shirtBoxes=['shirtSw','shirtSw2'].map($),pantBoxes=['pantSw','pantSw2'].map($);
-function setShirt(c){shirtColor=c;me.userData.shirt.color.setHex(c);me.userData.shirt.emissive.setHex(c);if(socket)socket.emit('join',{name:playerName,color:shirtColor,pant:pantColor});}
-function setPant(c){pantColor=c;me.userData.pant.color.setHex(c);me.userData.pant.emissive.setHex(c);}
+function setShirt(c){shirtColor=c;me.userData.shirt.color.setHex(c);me.userData.shirt.emissive.setHex(c);if(socket)socket.emit('updateLook',{color:shirtColor,pant:pantColor});}
+function setPant(c){pantColor=c;me.userData.pant.color.setHex(c);me.userData.pant.emissive.setHex(c);if(socket)socket.emit('updateLook',{color:shirtColor,pant:pantColor});}
 function sync(){shirtBoxes.forEach(b=>[...b.children].forEach((e,i)=>e.classList.toggle('active',SHIRT_COLORS[i]===shirtColor)));
   pantBoxes.forEach(b=>[...b.children].forEach((e,i)=>e.classList.toggle('active',PANT_COLORS[i]===pantColor)));}
 shirtBoxes.forEach(b=>buildSwatches(b,SHIRT_COLORS,()=>shirtColor,c=>{setShirt(c);savePrefs();sync();}));
