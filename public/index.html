@@ -67,6 +67,21 @@
   .lobbyList .pl{font-size:15px;color:#e2e8f0;padding:3px 0;}
   .lobbyWait{font-size:13px;color:#64748b;font-style:italic;}
 
+  /* Nút điều khiển cảm ứng (điện thoại) */
+  #touchCtrl{position:fixed;inset:0;z-index:8;pointer-events:none;display:none;}
+  #touchCtrl.on{display:block;}
+  .tbtn{position:fixed;pointer-events:auto;width:72px;height:72px;border-radius:50%;
+        background:rgba(56,189,248,.28);border:2px solid rgba(56,189,248,.7);color:#f0f9ff;
+        font-size:30px;display:flex;align-items:center;justify-content:center;
+        backdrop-filter:blur(3px);user-select:none;-webkit-user-select:none;touch-action:none;
+        box-shadow:0 4px 14px rgba(0,0,0,.35);}
+  .tbtn:active{background:rgba(56,189,248,.55);transform:scale(.92);}
+  #btnLeft {left:18px;  bottom:96px;}
+  #btnRight{left:104px; bottom:96px;}
+  #btnJump {right:18px; bottom:140px;width:84px;height:84px;font-size:34px;
+            background:rgba(124,255,0,.28);border-color:rgba(124,255,0,.7);}
+  #btnSlide{right:112px;bottom:70px;background:rgba(255,45,120,.28);border-color:rgba(255,45,120,.7);}
+
   /* Danh sách người chơi online */
   .online{position:fixed;top:48px;left:12px;z-index:6;background:rgba(15,23,42,.6);
           border:1px solid #334155;border-radius:10px;padding:8px 12px;font-size:13px;max-width:200px;}
@@ -117,6 +132,14 @@
       <input id="chatInput" placeholder="Nhập tin nhắn… (Enter gửi)" maxlength="200">
       <button id="chatSend">Gửi</button>
     </div>
+  </div>
+
+  <!-- Nút điều khiển cảm ứng (chỉ hiện trên điện thoại khi đang chạy) -->
+  <div id="touchCtrl">
+    <div class="tbtn" id="btnLeft">◀</div>
+    <div class="tbtn" id="btnRight">▶</div>
+    <div class="tbtn" id="btnJump">▲</div>
+    <div class="tbtn" id="btnSlide">▼</div>
   </div>
 
   <!-- Start -->
@@ -360,12 +383,14 @@ function beginRun(){
   reset(); state='play';
   lobbyScr.classList.add('hidden'); startScr.classList.add('hidden'); overScr.classList.add('hidden');
   onlineBox.style.display='block'; chatbox.style.display='block';
+  updateTouchCtrl();
 }
 function gameOver(){
   state='over';const m=Math.floor(score);finalEl.textContent=m+' m';
   if(m>hiScore){hiScore=m;localStorage.setItem('run3dmp_hi',hiScore);hiEl.textContent=hiScore;overMsg.textContent='🎉 Kỷ lục mới! 🏆 '+trophies+' cúp · 🪙 '+coinCount;}
   else overMsg.textContent='Xa nhất: '+hiScore+' m · 🏆 '+trophies+' cúp · 🪙 '+coinCount;
   overScr.classList.remove('hidden');
+  $('touchCtrl').classList.remove('on');
 }
 
 // ---------- Vòng lặp ----------
@@ -482,11 +507,28 @@ addEventListener('keydown',e=>{
   if(e.code==='ArrowDown')slide();
   if(e.code==='Enter'&&state==='play'){chatInput.focus();}
 });
+// Swipe chỉ tính khi chạm trên canvas (không đè lên nút/giao diện)
 let sx=0,sy=0;
-addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
-addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+const cv=renderer.domElement;
+cv.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+cv.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
   if(Math.abs(dx)<25&&Math.abs(dy)<25){if(state==='play')jump();return;}
   if(Math.abs(dx)>Math.abs(dy))moveLane(dx>0?1:-1);else{if(dy<0)jump();else slide();}},{passive:true});
+
+// Nút điều khiển cảm ứng (điện thoại)
+const touchCtrl=$('touchCtrl');
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints>0;
+function bindBtn(id,fn){const el=$(id);
+  const press=e=>{e.preventDefault();e.stopPropagation();fn();};
+  el.addEventListener('touchstart',press,{passive:false});
+  el.addEventListener('mousedown',press);}
+bindBtn('btnLeft', ()=>moveLane(-1));
+bindBtn('btnRight',()=>moveLane(1));
+bindBtn('btnJump', ()=>jump());
+bindBtn('btnSlide',()=>slide());
+// Bật nút khi đang chạy trên thiết bị cảm ứng
+function updateTouchCtrl(){ touchCtrl.classList.toggle('on', isTouch && state==='play'); }
+
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 
 // ---------- Bộ chọn màu ----------
