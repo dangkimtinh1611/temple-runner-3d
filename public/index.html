@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Temple Runner 3D - Multiplayer</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;font-family:"Segoe UI",system-ui,Arial,sans-serif;background:#0b1220;color:#e2e8f0;user-select:none;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+
+  .hud{position:fixed;top:12px;left:0;right:0;display:flex;justify-content:space-between;
+       padding:0 16px;font-weight:800;font-size:clamp(14px,3.3vw,20px);
+       text-shadow:0 2px 6px rgba(0,0,0,.6);pointer-events:none;z-index:5;}
+  .hud .hi{color:#fcd34d;} .coins{color:#fde047;} .trophyHud{color:#fbbf24;}
+
+  .screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;
+          justify-content:center;gap:14px;text-align:center;padding:22px;
+          background:radial-gradient(ellipse at center,rgba(15,23,42,.72),rgba(8,12,24,.94));
+          backdrop-filter:blur(4px);transition:opacity .3s;}
+  .screen.hidden{opacity:0;pointer-events:none;}
+  .screen h1{font-size:clamp(24px,6vw,42px);color:#f8fafc;} .screen h1 span{color:#38bdf8;}
+  .screen h2{font-size:clamp(22px,5.5vw,34px);color:#f8fafc;}
+  .screen p{font-size:clamp(12px,3vw,15px);color:#94a3b8;max-width:440px;line-height:1.6;}
+  .big{font-size:clamp(28px,8vw,48px);font-weight:900;color:#38bdf8;}
+  .nameInput{padding:11px 16px;border-radius:12px;border:1px solid #475569;background:#1e293b;
+             color:#f8fafc;font-size:16px;text-align:center;width:min(280px,80vw);}
+  .btn{background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#06263a;border:none;border-radius:999px;
+       padding:13px 38px;font-size:clamp(15px,3.5vw,18px);font-weight:800;cursor:pointer;
+       box-shadow:0 10px 26px rgba(56,189,248,.4);transition:transform .1s;}
+  .btn:hover{transform:translateY(-2px);} .btn:active{transform:translateY(0);}
+
+  .picker{display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .picker .row{display:flex;align-items:center;gap:10px;font-size:14px;color:#cbd5e1;}
+  .picker .row b{width:48px;text-align:right;color:#94a3b8;font-weight:600;}
+  .swatches{display:flex;gap:7px;} .sw{width:26px;height:26px;border-radius:50%;cursor:pointer;
+       border:3px solid transparent;transition:transform .12s;} .sw:hover{transform:scale(1.12);}
+  .sw.active{border-color:#f8fafc;box-shadow:0 0 0 2px #38bdf8;}
+  .keys{font-size:12.5px;color:#64748b;line-height:1.7;}
+  kbd{background:#334155;border:1px solid #475569;border-radius:6px;padding:2px 8px;font-size:12px;color:#e2e8f0;}
+
+  /* Danh sách người chơi online */
+  .online{position:fixed;top:48px;left:12px;z-index:6;background:rgba(15,23,42,.6);
+          border:1px solid #334155;border-radius:10px;padding:8px 12px;font-size:13px;max-width:200px;}
+  .online h4{font-size:12px;color:#94a3b8;margin-bottom:4px;}
+  .online .pl{color:#e2e8f0;padding:1px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  /* Khung chat */
+  .chatbox{position:fixed;bottom:12px;left:12px;z-index:7;width:min(320px,86vw);}
+  .chatlog{max-height:150px;overflow-y:auto;background:rgba(15,23,42,.55);border:1px solid #334155;
+           border-radius:10px 10px 0 0;padding:8px 10px;font-size:13px;line-height:1.5;}
+  .chatlog .m{margin-bottom:3px;word-break:break-word;}
+  .chatlog .m b{color:#38bdf8;} .chatlog .m.sys{color:#fbbf24;font-style:italic;}
+  .chatrow{display:flex;}
+  .chatrow input{flex:1;padding:9px 12px;border:1px solid #334155;border-top:none;border-radius:0 0 0 10px;
+       background:#1e293b;color:#f8fafc;font-size:14px;outline:none;}
+  .chatrow button{padding:0 16px;border:none;border-radius:0 0 10px 0;background:#0ea5e9;color:#fff;
+       font-weight:700;cursor:pointer;}
+
+  .status{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:8;font-size:13px;
+          color:#94a3b8;background:rgba(15,23,42,.6);padding:4px 12px;border-radius:999px;}
+  .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-20px);
+         background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#3a2600;font-weight:800;
+         padding:9px 20px;border-radius:999px;z-index:20;opacity:0;pointer-events:none;
+         transition:opacity .3s,transform .3s;} .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div class="status" id="status">⚪ Chưa kết nối</div>
+  <div class="hud">
+    <div id="score">0 m</div>
+    <div class="coins">🪙 <span id="coins">0</span></div>
+    <div class="trophyHud">🏆 <span id="trophies">0</span></div>
+    <div class="hi">HI <span id="hiscore">0</span></div>
+  </div>
+  <div class="toast" id="toast">🏆 Cúp mới!</div>
+
+  <div class="online" id="onlineBox" style="display:none">
+    <h4>👥 Đang chơi</h4>
+    <div id="onlineList"></div>
+  </div>
+
+  <div class="chatbox" id="chatbox" style="display:none">
+    <div class="chatlog" id="chatlog"></div>
+    <div class="chatrow">
+      <input id="chatInput" placeholder="Nhập tin nhắn… (Enter gửi)" maxlength="200">
+      <button id="chatSend">Gửi</button>
+    </div>
+  </div>
+
+  <!-- Start -->
+  <div class="screen" id="startScreen">
+    <h1>🏃 <span>Temple Runner 3D</span></h1>
+    <p>Chạy cùng bạn bè trong cùng phòng, thấy nhân vật của nhau và trò chuyện. Mỗi 1000m nhận 1 cúp 🏆!</p>
+    <input class="nameInput" id="nameInput" placeholder="Tên của bạn" maxlength="16">
+    <div class="picker">
+      <div class="row"><b>Áo</b><div class="swatches" id="shirtSw"></div></div>
+      <div class="row"><b>Quần</b><div class="swatches" id="pantSw"></div></div>
+    </div>
+    <button class="btn" id="startBtn">▶ Vào phòng & chạy</button>
+    <div class="keys">
+      💻 <kbd>←</kbd> <kbd>→</kbd> làn · <kbd>Space</kbd>/<kbd>↑</kbd> nhảy · <kbd>↓</kbd> trượt · <kbd>Enter</kbd> chat<br>
+      📱 vuốt <b>trái / phải / lên / xuống</b>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div class="screen hidden" id="overScreen">
+    <h2>💥 Ngã rồi!</h2>
+    <div class="big" id="finalScore">0 m</div>
+    <p id="overMsg"></p>
+    <div class="picker">
+      <div class="row"><b>Áo</b><div class="swatches" id="shirtSw2"></div></div>
+      <div class="row"><b>Quần</b><div class="swatches" id="pantSw2"></div></div>
+    </div>
+    <button class="btn" id="retryBtn">🔄 Chạy lại</button>
+  </div>
+
+<!-- Socket.IO client do server tự phục vụ -->
+<script src="/socket.io/socket.io.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const $ = id => document.getElementById(id);
+const statusEl=$('status'), scoreEl=$('score'), coinsEl=$('coins'), trophyEl=$('trophies'),
+      hiEl=$('hiscore'), toastEl=$('toast'), startScr=$('startScreen'), overScr=$('overScreen'),
+      finalEl=$('finalScore'), overMsg=$('overMsg'), onlineBox=$('onlineBox'), onlineList=$('onlineList'),
+      chatbox=$('chatbox'), chatlog=$('chatlog'), chatInput=$('chatInput');
+
+// ---------- Màu & lưu trữ ----------
+const SHIRT_COLORS=[0x00e5ff,0xff2d78,0x7cff00,0xffd500,0xa855ff,0xff7a1a,0xffffff,0xff4d6d];
+const PANT_COLORS =[0x1b2a4a,0x00b4d8,0xef476f,0x06d6a0,0xffd166,0x9b5de5,0xf15bb5,0x343a40];
+const prefs=JSON.parse(localStorage.getItem('run3dmp_prefs')||'{}');
+let shirtColor=prefs.shirt??SHIRT_COLORS[0], pantColor=prefs.pant??PANT_COLORS[1];
+let playerName=prefs.name||'';
+$('nameInput').value=playerName;
+function savePrefs(){localStorage.setItem('run3dmp_prefs',JSON.stringify({shirt:shirtColor,pant:pantColor,name:playerName}));}
+let hiScore=parseInt(localStorage.getItem('run3dmp_hi')||'0',10); hiEl.textContent=hiScore;
+
+// ---------- Three.js ----------
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap; $('app').appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xf6d9a8);
+scene.fog=new THREE.Fog(0xf0cf9a,30,85);
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,200);
+camera.position.set(0,5.2,8.5); camera.lookAt(0,1.2,-10);
+
+scene.add(new THREE.HemisphereLight(0xfff0d0,0x5a6b3a,0.95));
+const sun=new THREE.DirectionalLight(0xffe8c0,1.2);
+sun.position.set(-8,18,6); sun.castShadow=true; sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.near=1; sun.shadow.camera.far=60;
+sun.shadow.camera.left=-15; sun.shadow.camera.right=15; sun.shadow.camera.top=20; sun.shadow.camera.bottom=-20;
+scene.add(sun);
+
+const LANES=[-2.4,0,2.4], TILE=12, NUM_TILES=8, GRAV=-40, JUMP_V=13;
+
+// ----- Cảnh thành cổ + cây cỏ -----
+const roadMat=new THREE.MeshStandardMaterial({color:0xb89b6e,roughness:1});
+const grassMat=new THREE.MeshStandardMaterial({color:0x4e8c3a,roughness:1});
+const stoneMat=new THREE.MeshStandardMaterial({color:0xc9b892,roughness:.95});
+const stoneDkMat=new THREE.MeshStandardMaterial({color:0xa6916a,roughness:.95});
+const roofMat=new THREE.MeshStandardMaterial({color:0x9c3b2e,roughness:.8});
+const trunkMat=new THREE.MeshStandardMaterial({color:0x6b4a2a,roughness:.9});
+const leafMat1=new THREE.MeshStandardMaterial({color:0x2f7d32,roughness:.9});
+const leafMat2=new THREE.MeshStandardMaterial({color:0x4caf50,roughness:.9});
+const bushMat=new THREE.MeshStandardMaterial({color:0x3e9142,roughness:1});
+const tiles=[];
+function makeTree(x,z,s=1){const t=new THREE.Group();
+  const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,1.4,8),trunkMat);tr.position.y=0.7;tr.castShadow=true;t.add(tr);
+  const c1=new THREE.Mesh(new THREE.ConeGeometry(0.9,1.3,10),leafMat1);c1.position.y=1.7;c1.castShadow=true;t.add(c1);
+  const c2=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.1,10),leafMat2);c2.position.y=2.3;c2.castShadow=true;t.add(c2);
+  t.position.set(x,0,z);t.scale.setScalar(s);return t;}
+function makeBush(x,z,s=1){const b=new THREE.Mesh(new THREE.SphereGeometry(0.45,8,6),bushMat);
+  b.position.set(x,0.25*s,z);b.scale.set(s,0.8*s,s);b.castShadow=true;return b;}
+function makeGrass(x,z){const g=new THREE.Group();const gm=new THREE.MeshStandardMaterial({color:0x66bb3a,roughness:1});
+  for(let i=0;i<4;i++){const bl=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.5,4),gm);
+  bl.position.set((Math.random()-.5)*.4,0.25,(Math.random()-.5)*.4);bl.rotation.z=(Math.random()-.5)*.5;g.add(bl);}
+  g.position.set(x,0,z);return g;}
+function makeTile(z){const g=new THREE.Group();
+  const road=new THREE.Mesh(new THREE.BoxGeometry(8,0.5,TILE),roadMat);road.position.y=-0.25;road.receiveShadow=true;g.add(road);
+  for(let i=0;i<3;i++){const seam=new THREE.Mesh(new THREE.BoxGeometry(8,0.02,0.12),stoneDkMat);seam.position.set(0,0.01,-TILE/2+i*(TILE/3)+TILE/6);g.add(seam);}
+  for(const s of[-1,1]){
+    const grass=new THREE.Mesh(new THREE.BoxGeometry(8,0.4,TILE),grassMat);grass.position.set(s*8,-0.2,0);grass.receiveShadow=true;g.add(grass);
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(1.2,3.2,TILE),stoneMat);wall.position.set(s*6,1.4,0);wall.castShadow=true;g.add(wall);
+    for(let i=0;i<4;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.6,1.1),stoneDkMat);m.position.set(s*6,3.3,-TILE/2+i*(TILE/4)+TILE/8);g.add(m);}
+    g.add(makeTree(s*9.5,-TILE/2+Math.random()*TILE,0.9+Math.random()*.5));
+    g.add(makeBush(s*(7.6+Math.random()),-TILE/2+Math.random()*TILE,0.8+Math.random()*.6));
+    g.add(makeGrass(s*(7.2+Math.random()*1.5),-TILE/2+Math.random()*TILE));
+  }
+  if(Math.random()<0.5){const s=Math.random()<.5?-1:1;const tw=new THREE.Group();
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.3,4.5,10),stoneMat);base.position.y=2.25;base.castShadow=true;tw.add(base);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(1.5,1.6,10),roofMat);roof.position.y=5.3;tw.add(roof);
+    tw.position.set(s*7.2,0,-TILE/2+Math.random()*TILE);g.add(tw);}
+  g.position.z=z;scene.add(g);tiles.push(g);return g;}
+
+// ----- Dựng nhân vật (humanoid) -----
+function buildAvatar(shirtHex,pantHex){
+  const player=new THREE.Group();
+  const skin=new THREE.MeshStandardMaterial({color:0xffd9b3,roughness:.65});
+  const shirt=new THREE.MeshStandardMaterial({color:shirtHex,roughness:.32,metalness:.15,emissive:shirtHex,emissiveIntensity:.18});
+  const pant=new THREE.MeshStandardMaterial({color:pantHex,roughness:.4,metalness:.1,emissive:pantHex,emissiveIntensity:.12});
+  const shoe=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.35,metalness:.2});
+  const hair=new THREE.MeshStandardMaterial({color:0x3a2416,roughness:.85});
+  const root=new THREE.Group(); player.add(root);
+  const chest=new THREE.Mesh(new THREE.CapsuleGeometry(0.34,0.55,6,14),shirt);chest.position.y=1.35;chest.castShadow=true;root.add(chest);
+  const hip=new THREE.Mesh(new THREE.CapsuleGeometry(0.3,0.25,6,12),pant);hip.position.y=0.95;hip.castShadow=true;root.add(hip);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.14,0.18,10),skin);neck.position.y=1.78;root.add(neck);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.28,20,20),skin);head.position.y=2.02;head.scale.set(.92,1.05,.95);head.castShadow=true;root.add(head);
+  const hr=new THREE.Mesh(new THREE.SphereGeometry(0.3,20,20,0,Math.PI*2,0,Math.PI*.62),hair);hr.position.set(0,2.08,0);root.add(hr);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.12,8),skin);nose.position.set(0,2,-0.27);nose.rotation.x=-Math.PI/2;root.add(nose);
+  const ewm=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.3}),pm=new THREE.MeshStandardMaterial({color:0x1a1a2e});
+  for(const sx of[-1,1]){const ew=new THREE.Mesh(new THREE.SphereGeometry(0.07,12,12),ewm);ew.position.set(sx*.11,2.06,-0.23);ew.scale.z=.5;root.add(ew);
+    const pp=new THREE.Mesh(new THREE.SphereGeometry(0.035,10,10),pm);pp.position.set(sx*.11,2.06,-0.27);root.add(pp);
+    const ear=new THREE.Mesh(new THREE.SphereGeometry(0.07,10,10),skin);ear.position.set(sx*.27,2,0);ear.scale.set(.6,1,.8);root.add(ear);}
+  function limb(ul,ll,r,um,lm,fm){const j=new THREE.Group();
+    const u=new THREE.Mesh(new THREE.CapsuleGeometry(r,ul,4,10),um);u.position.y=-ul/2;u.castShadow=true;j.add(u);
+    const k=new THREE.Group();k.position.y=-ul;j.add(k);
+    const l=new THREE.Mesh(new THREE.CapsuleGeometry(r*.85,ll,4,10),lm);l.position.y=-ll/2;l.castShadow=true;k.add(l);
+    if(fm){const f=new THREE.Mesh(new THREE.BoxGeometry(r*2.4,0.14,0.42),fm);f.position.set(0,-ll-0.02,-0.08);k.add(f);}
+    return{j,k};}
+  const aL=limb(0.42,0.4,0.1,shirt,skin,null),aR=limb(0.42,0.4,0.1,shirt,skin,null);
+  aL.j.position.set(-0.4,1.55,0);aR.j.position.set(0.4,1.55,0);root.add(aL.j,aR.j);
+  for(const a of[aL,aR]){const h=new THREE.Mesh(new THREE.SphereGeometry(0.11,12,12),skin);h.position.y=-0.4;a.k.add(h);}
+  const lL=limb(0.5,0.48,0.13,pant,pant,shoe),lR=limb(0.5,0.48,0.13,pant,pant,shoe);
+  lL.j.position.set(-0.17,0.9,0);lR.j.position.set(0.17,0.9,0);root.add(lL.j,lR.j);
+  player.userData={root,aL,aR,lL,lR,shirt,pant};
+  return player;
+}
+
+// Nhân vật của mình
+const me=buildAvatar(shirtColor,pantColor); scene.add(me);
+// Nhãn tên nổi trên đầu (sprite)
+function makeLabel(text,color='#38bdf8'){
+  const cv=document.createElement('canvas');cv.width=256;cv.height=64;const c=cv.getContext('2d');
+  c.font='bold 30px Segoe UI';c.textAlign='center';c.fillStyle='rgba(15,23,42,.75)';
+  c.fillRect(0,0,256,64);c.fillStyle=color;c.fillText(text,128,42);
+  const tex=new THREE.CanvasTexture(cv);const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));
+  sp.scale.set(2.2,0.55,1);sp.position.y=2.8;return sp;}
+
+// Người chơi khác: others[id] = {avatar, label, tx, tz, ty, tlane}
+const others={};
+
+// ---------- Trạng thái game ----------
+let state='start',score,coinCount,speed,targetLane,px,py,vy,sliding,slideT,trophies,nextTrophy;
+const obstacles=[],coins=[];
+const obLow=new THREE.MeshStandardMaterial({color:0x8b3a3a,roughness:.7});
+const obHigh=new THREE.MeshStandardMaterial({color:0x6b4a8b,roughness:.7});
+const coinMat=new THREE.MeshStandardMaterial({color:0xffd34d,roughness:.3,metalness:.6,emissive:0x8a6a00});
+function spawnChunk(zBase){const n=1+Math.floor(Math.random()*2),used=new Set();
+  for(let i=0;i<n;i++){let lane=Math.floor(Math.random()*3);if(used.size>=2)break;used.add(lane);
+    const z=zBase-Math.random()*TILE,k=Math.random();
+    if(k<.45){const m=new THREE.Mesh(new THREE.BoxGeometry(1.8,1,0.8),obLow);m.position.set(LANES[lane],0.5,z);m.castShadow=true;m.userData={type:'low'};scene.add(m);obstacles.push(m);}
+    else if(k<.75){const m=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.6,0.8),obHigh);m.position.set(LANES[lane],2,z);m.castShadow=true;m.userData={type:'high'};scene.add(m);obstacles.push(m);}
+    else{for(let c=0;c<3;c++){const co=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.1,16),coinMat);co.rotation.x=Math.PI/2;co.position.set(LANES[lane],1.1,z-c*1.4);scene.add(co);coins.push(co);}}}}
+function reset(){score=0;coinCount=0;speed=14;targetLane=1;px=0;py=0;vy=0;sliding=false;slideT=0;trophies=0;nextTrophy=1000;
+  coinsEl.textContent=0;trophyEl.textContent=0;scoreEl.textContent='0 m';
+  obstacles.forEach(o=>scene.remove(o));obstacles.length=0;coins.forEach(c=>scene.remove(c));coins.length=0;
+  tiles.forEach(t=>scene.remove(t));tiles.length=0;
+  for(let i=0;i<NUM_TILES;i++)makeTile(-i*TILE);for(let i=2;i<NUM_TILES;i++)spawnChunk(-i*TILE);me.position.set(0,0,0);}
+function jump(){if(state==='play'&&py<=0.01&&!sliding)vy=JUMP_V;}
+function slide(){if(state==='play'&&py<=0.01){sliding=true;slideT=0.6;}}
+function moveLane(d){if(state==='play')targetLane=Math.max(0,Math.min(2,targetLane+d));}
+function hit(o){const dx=Math.abs(px-o.position.x),dz=Math.abs(0-o.position.z);
+  if(dx<1.4&&dz<0.7){if(o.userData.type==='low')return py<0.9;if(o.userData.type==='high')return !sliding;}return false;}
+
+function showToast(m){toastEl.textContent=m;toastEl.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>toastEl.classList.remove('show'),1700);}
+
+function startGame(){
+  playerName=($('nameInput').value||'Người chơi').trim().slice(0,16);
+  savePrefs(); connect();
+  reset();state='play';startScr.classList.add('hidden');overScr.classList.add('hidden');
+  onlineBox.style.display='block';chatbox.style.display='block';
+}
+function gameOver(){
+  state='over';const m=Math.floor(score);finalEl.textContent=m+' m';
+  if(m>hiScore){hiScore=m;localStorage.setItem('run3dmp_hi',hiScore);hiEl.textContent=hiScore;overMsg.textContent='🎉 Kỷ lục mới! 🏆 '+trophies+' cúp · 🪙 '+coinCount;}
+  else overMsg.textContent='Xa nhất: '+hiScore+' m · 🏆 '+trophies+' cúp · 🪙 '+coinCount;
+  overScr.classList.remove('hidden');
+}
+
+// ---------- Vòng lặp ----------
+const clock=new THREE.Clock();let netTimer=0;
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),0.05);
+  if(state==='play'){
+    score+=speed*dt;speed+=dt*0.45;
+    px+=(LANES[targetLane]-px)*Math.min(1,dt*12);
+    vy+=GRAV*dt;py+=vy*dt;if(py<0){py=0;vy=0;}
+    if(sliding){slideT-=dt;if(slideT<=0)sliding=false;}
+    me.position.x=px;me.position.y=py;
+    // animation chạy
+    const u=me.userData,t=performance.now()*0.001,cyc=t*(speed*0.9),sw=Math.sin(cyc),sw2=Math.sin(cyc*2),run=py<=0.05&&!sliding;
+    if(sliding){u.root.rotation.x=-0.9;u.root.position.y=-0.45;u.lL.j.rotation.x=u.lR.j.rotation.x=0.4;u.aL.j.rotation.x=u.aR.j.rotation.x=1.3;}
+    else{u.root.rotation.x=run?0.12:0;u.root.position.y=run?Math.abs(sw2)*0.06:0;const a=run?1:.25;
+      u.lL.j.rotation.x=sw*0.9*a;u.lR.j.rotation.x=-sw*0.9*a;u.lL.k.rotation.x=Math.max(0,-sw)*1.1*a;u.lR.k.rotation.x=Math.max(0,sw)*1.1*a;
+      u.aL.j.rotation.x=-sw*0.8*a;u.aR.j.rotation.x=sw*0.8*a;u.aL.k.rotation.x=u.aR.k.rotation.x=0.5*a;
+      if(py>0.05){u.lL.j.rotation.x=-0.7;u.lR.j.rotation.x=-0.4;u.aL.j.rotation.x=u.aR.j.rotation.x=-1.4;}}
+    tiles.forEach(tl=>{tl.position.z+=speed*dt;if(tl.position.z>TILE){tl.position.z-=NUM_TILES*TILE;spawnChunk(tl.position.z);}});
+    for(let i=obstacles.length-1;i>=0;i--){const o=obstacles[i];o.position.z+=speed*dt;if(o.position.z>10){scene.remove(o);obstacles.splice(i,1);continue;}if(hit(o))return gameOver();}
+    for(let i=coins.length-1;i>=0;i--){const c=coins[i];c.position.z+=speed*dt;c.rotation.z+=dt*5;if(c.position.z>10){scene.remove(c);coins.splice(i,1);continue;}
+      if(Math.abs(c.position.x-px)<0.8&&Math.abs(c.position.z)<0.9&&Math.abs(c.position.y-(py+1.1))<1.3){scene.remove(c);coins.splice(i,1);coinCount++;coinsEl.textContent=coinCount;}}
+    scoreEl.textContent=Math.floor(score)+' m';
+    if(score>=nextTrophy){trophies++;nextTrophy+=1000;trophyEl.textContent=trophies;showToast('🏆 Cúp mới! '+(trophies*1000)+'m');}
+    camera.position.x+=(px*0.4-camera.position.x)*Math.min(1,dt*6);
+    // gửi trạng thái lên server (~15 lần/giây)
+    netTimer+=dt;if(socket&&netTimer>0.066){netTimer=0;socket.emit('state',{x:px,y:py,z:0,lane:targetLane,score:Math.floor(score)});}
+  }
+  // nội suy vị trí người chơi khác cho mượt
+  for(const id in others){const o=others[id];o.avatar.position.x+=(o.tx-o.avatar.position.x)*Math.min(1,dt*10);
+    o.avatar.position.y+=(o.ty-o.avatar.position.y)*Math.min(1,dt*10);
+    // chân người khác vung đơn giản
+    const u=o.avatar.userData,sw=Math.sin(performance.now()*0.012);u.lL.j.rotation.x=sw*0.8;u.lR.j.rotation.x=-sw*0.8;u.aL.j.rotation.x=-sw*0.6;u.aR.j.rotation.x=sw*0.6;}
+  renderer.render(scene,camera);
+}
+
+// ---------- Socket.IO Multiplayer ----------
+let socket=null;
+function connect(){
+  if(socket) return;
+  socket=io();
+  socket.on('connect',()=>{statusEl.textContent='🟢 Đã kết nối';
+    socket.emit('join',{name:playerName,color:shirtColor,pant:pantColor});});
+  socket.on('disconnect',()=>{statusEl.textContent='🔴 Mất kết nối';});
+
+  // danh sách người đã ở trong phòng
+  socket.on('players',(list)=>{for(const id in list){if(id!==socket.id)addOther(list[id]);}updateOnline();});
+  socket.on('playerJoined',(p)=>{if(p.id!==socket.id)addOther(p);updateOnline();});
+  socket.on('playerState',(s)=>{const o=others[s.id];if(o){o.tx=LANES[s.lane]??s.x;o.ty=s.y;o.score=s.score;}updateOnline();});
+  socket.on('playerLeft',(id)=>{removeOther(id);updateOnline();});
+  socket.on('chat',(m)=>addChat(m));
+}
+function addOther(p){
+  if(others[p.id])return;
+  const av=buildAvatar(p.color??0xffffff,p.pant??0x333333);
+  av.position.set(0,0,-4); // người khác chạy phía trước một chút để mình thấy
+  const label=makeLabel(p.name||'?');av.add(label);scene.add(av);
+  others[p.id]={avatar:av,tx:0,ty:0,name:p.name,score:0};
+}
+function removeOther(id){const o=others[id];if(o){scene.remove(o.avatar);delete others[id];}}
+function updateOnline(){
+  const rows=['<div class="pl">🟦 '+playerName+' (bạn)</div>'];
+  for(const id in others)rows.push('<div class="pl">🟩 '+(others[id].name||'?')+'</div>');
+  onlineList.innerHTML=rows.join('');
+}
+function addChat(m){
+  const d=document.createElement('div');d.className='m'+(m.sys?' sys':'');
+  d.innerHTML=m.sys?escapeHtml(m.text):'<b>'+escapeHtml(m.name)+':</b> '+escapeHtml(m.text);
+  chatlog.appendChild(d);chatlog.scrollTop=chatlog.scrollHeight;
+  while(chatlog.children.length>60)chatlog.removeChild(chatlog.firstChild);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function sendChat(){const t=chatInput.value.trim();if(!t||!socket)return;socket.emit('chat',{text:t});chatInput.value='';}
+$('chatSend').addEventListener('click',sendChat);
+chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendChat();}e.stopPropagation();});
+
+// ---------- Controls ----------
+$('startBtn').addEventListener('click',startGame);
+$('retryBtn').addEventListener('click',()=>{reset();state='play';overScr.classList.add('hidden');});
+addEventListener('keydown',e=>{
+  if(document.activeElement===chatInput)return; // đang gõ chat thì bỏ qua phím game
+  if(e.code==='ArrowLeft')moveLane(-1);
+  if(e.code==='ArrowRight')moveLane(1);
+  if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();if(state!=='play'){if(!startScr.classList.contains('hidden'))startGame();else{reset();state='play';overScr.classList.add('hidden');}}else jump();}
+  if(e.code==='ArrowDown')slide();
+  if(e.code==='Enter'){chatInput.focus();}
+});
+let sx=0,sy=0;
+addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+  if(Math.abs(dx)<25&&Math.abs(dy)<25){if(state==='play')jump();return;}
+  if(Math.abs(dx)>Math.abs(dy))moveLane(dx>0?1:-1);else{if(dy<0)jump();else slide();}},{passive:true});
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+
+// ---------- Bộ chọn màu ----------
+function buildSwatches(el,colors,getA,onPick){el.innerHTML='';colors.forEach(c=>{const d=document.createElement('div');
+  d.className='sw'+(c===getA()?' active':'');d.style.background='#'+c.toString(16).padStart(6,'0');
+  d.addEventListener('click',()=>onPick(c));el.appendChild(d);});}
+const shirtBoxes=['shirtSw','shirtSw2'].map($),pantBoxes=['pantSw','pantSw2'].map($);
+function setShirt(c){shirtColor=c;me.userData.shirt.color.setHex(c);me.userData.shirt.emissive.setHex(c);if(socket)socket.emit('join',{name:playerName,color:shirtColor,pant:pantColor});}
+function setPant(c){pantColor=c;me.userData.pant.color.setHex(c);me.userData.pant.emissive.setHex(c);}
+function sync(){shirtBoxes.forEach(b=>[...b.children].forEach((e,i)=>e.classList.toggle('active',SHIRT_COLORS[i]===shirtColor)));
+  pantBoxes.forEach(b=>[...b.children].forEach((e,i)=>e.classList.toggle('active',PANT_COLORS[i]===pantColor)));}
+shirtBoxes.forEach(b=>buildSwatches(b,SHIRT_COLORS,()=>shirtColor,c=>{setShirt(c);savePrefs();sync();}));
+pantBoxes.forEach(b=>buildSwatches(b,PANT_COLORS,()=>pantColor,c=>{setPant(c);savePrefs();sync();}));
+sync();
+
+reset();animate();
+</script>
+</body>
+</html>

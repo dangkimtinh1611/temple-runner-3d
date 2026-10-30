@@ -1,0 +1,12 @@
+# Cấu hình deploy Render - tự động nhận khi nối repo GitHub
+# (Render -> New -> Blueprint -> chọn repo này)
+services:
+  - type: web
+    name: temple-runner-3d
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
