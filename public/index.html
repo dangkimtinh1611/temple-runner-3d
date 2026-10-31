@@ -145,13 +145,10 @@
   .steps{text-align:left;color:#cbd5e1;font-size:12.5px;line-height:1.7;margin:12px 0;
        background:rgba(148,163,184,.08);border-radius:10px;padding:10px 14px;}
   .steps b{color:#ffd54a;}
-  .bankTitle{color:#94a3b8;font-size:12px;margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;}
-  .bankGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
-  .bankGrid a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:10px;
-       background:#1e293b;border:1px solid #334155;text-decoration:none;color:#e2e8f0;font-size:10px;font-weight:600;
-       transition:transform .12s,border-color .12s;}
-  .bankGrid a:hover{transform:translateY(-2px);border-color:#34d399;}
-  .bankGrid a img{width:30px;height:30px;border-radius:7px;object-fit:cover;background:#fff;}
+  .bankHint{color:#94a3b8;font-size:11.5px;line-height:1.5;margin:10px 0 14px;}
+  .bankHint b{color:#cbd5e1;}
+  .saveQr{width:100%;padding:11px;border:none;border-radius:10px;cursor:pointer;margin-top:4px;
+       background:linear-gradient(135deg,#34d399,#059669);color:#04231a;font-weight:800;font-size:14px;}
   .donateCard .note{color:#cbd5e1;font-size:12.5px;line-height:1.55;margin:4px 0 16px;
        background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:10px;padding:10px 12px;}
   .donateCard .closeD{width:100%;padding:10px;border:1px solid #475569;border-radius:10px;cursor:pointer;
@@ -215,12 +212,13 @@
       </div>
       <div class="steps">
         <b>Cách donate (3 bước):</b><br>
-        1. Mở <b>app ngân hàng</b> của bạn (bấm logo bên dưới)<br>
+        1. Mở <b>app ngân hàng</b> của bạn<br>
         2. Chọn <b>Quét mã QR</b> → quét mã phía trên<br>
+        &nbsp;&nbsp;&nbsp;(hoặc <b>Lưu ảnh QR</b> rồi quét từ thư viện)<br>
         3. Nhập <b>số tiền</b> → bấm <b>Xác nhận</b> ✅
       </div>
-      <div class="bankTitle">Mở nhanh app ngân hàng</div>
-      <div class="bankGrid" id="bankGrid"></div>
+      <button class="saveQr" id="saveQr">💾 Lưu ảnh mã QR về máy</button>
+      <div class="bankHint">✅ Một mã QR này quét được bằng <b>mọi app ngân hàng</b> VN (VCB, Techcombank, MB, BIDV, MoMo…)</div>
       <div class="note">Cảm ơn bạn đã donate cho dịch vụ của chúng tôi. Chúng tôi sẽ dùng khoản donate này để thành lập một tổ chức từ thiện hoặc phát triển nâng cấp trò chơi này. ❤️</div>
       <button class="closeD" id="donateClose">Đóng</button>
     </div>
@@ -597,29 +595,17 @@ $('copyAcc').addEventListener('click',()=>{
   }).catch(()=>{ b.textContent='Số: 1058668729'; });
 });
 
-// Lưới app ngân hàng VN — bấm để mở app (deep link)
-const BANKS=[
-  {n:'Vietcombank',c:'VCB',u:'vietcombank://'},
-  {n:'Techcombank',c:'TCB',u:'tcb://'},
-  {n:'MB Bank',c:'MB',u:'mbmobile://'},
-  {n:'BIDV',c:'BIDV',u:'bidv://'},
-  {n:'VietinBank',c:'ICB',u:'vietinbank://'},
-  {n:'ACB',c:'ACB',u:'acb://'},
-  {n:'VPBank',c:'VPB',u:'vpbankneo://'},
-  {n:'Agribank',c:'VBA',u:'agribankmobile://'},
-  {n:'TPBank',c:'TPB',u:'tpb://'},
-  {n:'Sacombank',c:'STB',u:'sacombankpay://'},
-  {n:'MoMo',c:'',u:'momo://'},
-  {n:'ZaloPay',c:'',u:'zalopay://'}
-];
-(function renderBanks(){
-  const g=$('bankGrid');
-  g.innerHTML=BANKS.map(b=>{
-    const logo=b.c?`https://api.vietqr.io/img/${b.c}.png`:'';
-    const img=logo?`<img src="${logo}" onerror="this.style.display='none'">`:`<img style="display:flex;align-items:center;justify-content:center;background:#334155;color:#fff;font-size:9px" src="" onerror="this.outerHTML='<div style=&quot;width:30px;height:30px;border-radius:7px;background:#334155;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff&quot;>${b.n.slice(0,4)}</div>'">`;
-    return `<a href="${b.u}" title="Mở ${b.n}">${img}<span>${b.n}</span></a>`;
-  }).join('');
-})();
+// Lưu ảnh mã QR về máy
+$('saveQr').addEventListener('click',async()=>{
+  const url='https://img.vietqr.io/image/VCB-1058668729-compact2.png?accountName=DANG%20KIM%20TINH';
+  try{
+    const res=await fetch(url); const blob=await res.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='QR-donate-TempleRunner.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  }catch(e){ window.open(url,'_blank'); }
+});
 
 // ---------- Voice chat (WebRTC) ----------
 const peers={};            // peers[socketId] = RTCPeerConnection
