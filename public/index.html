@@ -116,6 +116,32 @@
          background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#3a2600;font-weight:800;
          padding:9px 20px;border-radius:999px;z-index:20;opacity:0;pointer-events:none;
          transition:opacity .3s,transform .3s;} .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* Nút Donate */
+  .donateBtn{position:fixed;top:12px;right:12px;z-index:11;display:flex;align-items:center;gap:6px;
+       padding:8px 14px;border:none;border-radius:999px;cursor:pointer;font-weight:800;font-size:14px;
+       color:#3a2600;background:linear-gradient(135deg,#ffd54a,#ff9f1c);
+       box-shadow:0 4px 14px rgba(255,159,28,.5);transition:transform .15s,box-shadow .15s;}
+  .donateBtn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(255,159,28,.7);}
+  .donateBtn:active{transform:translateY(0);}
+  /* Popup donate */
+  .donateOverlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+       background:rgba(2,6,23,.75);backdrop-filter:blur(4px);padding:16px;}
+  .donateOverlay.on{display:flex;}
+  .donateCard{background:linear-gradient(160deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:18px;
+       padding:24px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .donateCard h3{margin:0 0 4px;color:#ffd54a;font-size:20px;}
+  .donateCard .sub{color:#94a3b8;font-size:13px;margin-bottom:16px;}
+  .donateCard .qrWrap{background:#fff;border-radius:14px;padding:12px;display:inline-block;margin-bottom:14px;}
+  .donateCard .qrWrap img{display:block;width:200px;height:200px;}
+  .donateCard .momoInfo{color:#f8fafc;font-size:15px;font-weight:700;margin-bottom:4px;}
+  .donateCard .momoInfo span{color:#d946ef;}
+  .donateCard .note{color:#cbd5e1;font-size:12.5px;line-height:1.55;margin:14px 0 18px;
+       background:rgba(217,70,239,.08);border:1px solid rgba(217,70,239,.25);border-radius:10px;padding:10px 12px;}
+  .donateCard .openMomo{display:inline-block;width:100%;padding:11px;border:none;border-radius:10px;cursor:pointer;
+       background:linear-gradient(135deg,#d946ef,#a21caf);color:#fff;font-weight:800;font-size:14px;margin-bottom:8px;text-decoration:none;}
+  .donateCard .closeD{width:100%;padding:10px;border:1px solid #475569;border-radius:10px;cursor:pointer;
+       background:transparent;color:#cbd5e1;font-weight:700;font-size:13px;}
 </style>
 </head>
 <body>
@@ -158,6 +184,22 @@
     <button class="vbtn active" id="spkBtn" title="Bật/tắt loa">🔊</button>
   </div>
   <div id="audioZone" style="display:none"></div>
+
+  <!-- Nút Donate -->
+  <button class="donateBtn" id="donateBtn" title="Ủng hộ chúng tôi">☕ Donate</button>
+  <div class="donateOverlay" id="donateOverlay">
+    <div class="donateCard">
+      <h3>☕ Ủng hộ qua Momo</h3>
+      <div class="sub">Quét mã QR bằng app Momo để donate</div>
+      <div class="qrWrap">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=https%3A%2F%2Fme.momo.vn%2F0983329802" alt="QR Momo 0983329802">
+      </div>
+      <div class="momoInfo">Momo: <span>0983 329 802</span></div>
+      <div class="note">Cảm ơn bạn đã donate cho dịch vụ của chúng tôi. Chúng tôi sẽ dùng khoản donate này để thành lập một tổ chức từ thiện hoặc phát triển nâng cấp trò chơi này. ❤️</div>
+      <a class="openMomo" href="https://me.momo.vn/0983329802" target="_blank" rel="noopener">📱 Mở app Momo để chuyển</a>
+      <button class="closeD" id="donateClose">Đóng</button>
+    </div>
+  </div>
 
   <!-- Start -->
   <div class="screen" id="startScreen">
@@ -514,6 +556,12 @@ function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 function sendChat(){const t=chatInput.value.trim();if(!t||!socket)return;socket.emit('chat',{text:t});chatInput.value='';}
 $('chatSend').addEventListener('click',sendChat);
 chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendChat();}e.stopPropagation();});
+
+// ---------- Donate popup ----------
+const donateOverlay=$('donateOverlay');
+$('donateBtn').addEventListener('click',()=>donateOverlay.classList.add('on'));
+$('donateClose').addEventListener('click',()=>donateOverlay.classList.remove('on'));
+donateOverlay.addEventListener('click',e=>{if(e.target===donateOverlay)donateOverlay.classList.remove('on');});
 
 // ---------- Voice chat (WebRTC) ----------
 const peers={};            // peers[socketId] = RTCPeerConnection
